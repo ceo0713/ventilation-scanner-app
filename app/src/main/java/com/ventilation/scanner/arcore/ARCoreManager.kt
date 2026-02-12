@@ -82,10 +82,10 @@ class ARCoreManager(private val context: Context) {
             buffer.rewind()
             
             while (buffer.remaining() >= 4) {
-                val x = buffer.float
-                val y = buffer.float
-                val z = buffer.float
-                val confidence = buffer.float
+                val x = buffer.get()
+                val y = buffer.get()
+                val z = buffer.get()
+                val confidence = buffer.get()
                 
                 if (confidence > 0.5f) {
                     points.add(floatArrayOf(x, y, z))

@@ -11,6 +11,7 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import com.ventilation.scanner.MainActivity
 import com.ventilation.scanner.R
 import com.ventilation.scanner.arcore.SimpleMesh
@@ -81,9 +82,11 @@ class ResultFragment : Fragment() {
             val verticesJson = scan.meshVertices
             val facesJson = scan.meshFaces
             
-            val vertices = gson.fromJson(verticesJson, Array<List<Float>>::class.java)
+            val verticesType = object : com.google.gson.reflect.TypeToken<Array<List<Float>>>() {}.type
+            val vertices = gson.fromJson<Array<List<Float>>>(verticesJson, verticesType)
                 .map { it.toFloatArray() }
-            val faces = gson.fromJson(facesJson, Array<List<Int>>::class.java)
+            val facesType = object : com.google.gson.reflect.TypeToken<Array<List<Int>>>() {}.type
+            val faces = gson.fromJson<Array<List<Int>>>(facesJson, facesType)
                 .map { it.toIntArray() }
             
             val mesh = SimpleMesh(
