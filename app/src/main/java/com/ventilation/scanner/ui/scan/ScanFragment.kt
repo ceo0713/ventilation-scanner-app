@@ -134,25 +134,39 @@ class ScanFragment : Fragment() {
     }
     
     private fun createSimpleBox() {
-        val points = listOf(
-            floatArrayOf(0f, 0f, 0f),
-            floatArrayOf(4f, 0f, 0f),
-            floatArrayOf(4f, 0f, 3f),
-            floatArrayOf(0f, 0f, 3f),
-            floatArrayOf(0f, 2.5f, 0f),
-            floatArrayOf(4f, 2.5f, 0f),
-            floatArrayOf(4f, 2.5f, 3f),
-            floatArrayOf(0f, 2.5f, 3f)
-        )
-        
-        arCoreManager = ARCoreManager(requireContext())
-        arCoreManager?.let { manager ->
-            points.forEach { manager.accumulatePoints(com.google.ar.core.Frame()) }
+        lifecycleScope.launch {
+            val bounds = com.ventilation.scanner.arcore.BoundingBox(
+                0f, 4f, 0f, 2.5f, 0f, 3f
+            )
+            val mesh = MeshGenerator.generateSimpleBoxMesh(bounds)
+            
+            val verticesJson = gson.toJson(mesh.vertices.map { it.toList() })
+            val facesJson = gson.toJson(mesh.faces.map { it.toList() })
+            
+            val scanData = ScanData(
+                name = "간단모델_${System.currentTimeMillis()}",
+                timestamp = Date(),
+                meshVertices = verticesJson,
+                meshFaces = facesJson,
+                minX = bounds.minX,
+                maxX = bounds.maxX,
+                minY = bounds.minY,
+                maxY = bounds.maxY,
+                minZ = bounds.minZ,
+                maxZ = bounds.maxZ,
+                width = bounds.width,
+                height = bounds.height,
+                depth = bounds.depth
+            )
+            
+            val scanId = withContext(Dispatchers.IO) {
+                (requireActivity() as MainActivity).database.scanDao().insertScan(scanData)
+            }
+            
+            pointCountText.text = "포인트: 8 (간단 모델)"
+            statusText.text = "간단 모델 저장 완료 (ID: $scanId)"
+            Toast.makeText(requireContext(), "간단 모델이 저장되었습니다", Toast.LENGTH_SHORT).show()
         }
-        
-        pointCountText.text = "포인트: 8 (간단 모델)"
-        saveScanButton.isEnabled = true
-        statusText.text = "간단 모델 생성 완료"
     }
     
     private fun saveScan() {
