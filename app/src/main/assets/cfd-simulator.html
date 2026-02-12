@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CFD Simulator</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #1a1a1a;
+            font-family: sans-serif;
+        }
+        #canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            image-rendering: pixelated;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+        }
+        #status {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div id="info">
+        <div>시뮬레이션 준비 중...</div>
+        <div id="metrics"></div>
+    </div>
+    <div id="status">대기 중</div>
+    
+    <script src="cfd-lbm.js"></script>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const infoDiv = document.getElementById('info');
+        const metricsDiv = document.getElementById('metrics');
+        const statusDiv = document.getElementById('status');
+        
+        let simulator = null;
+        let animationId = null;
+        let isRunning = false;
+        
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        
+        function initSimulator(config) {
+            const gridWidth = config.gridWidth || 128;
+            const gridHeight = config.gridHeight || 128;
+            
+            simulator = new LBMSimulator(gridWidth, gridHeight);
+            
+            if (config.obstacles) {
+                config.obstacles.forEach(obs => {
+                    for (let x = obs.x; x < obs.x + obs.width; x++) {
+                        for (let y = obs.y; y < obs.y + obs.height; y++) {
+                            simulator.setObstacle(x, y, true);
+                        }
+                    }
+                });
+            }
+            
+            if (config.inlets) {
+                config.inlets.forEach(inlet => {
+                    for (let x = inlet.x; x < inlet.x + inlet.width; x++) {
+                        for (let y = inlet.y; y < inlet.y + inlet.height; y++) {
+                            simulator.setInlet(x, y, inlet.velocityX || 0.1, inlet.velocityY || 0.0);
+                        }
+                    }
+                });
+            }
+            
+            if (config.outlets) {
+                config.outlets.forEach(outlet => {
+                    for (let x = outlet.x; x < outlet.x + outlet.width; x++) {
+                        for (let y = outlet.y; y < outlet.y + outlet.height; y++) {
+                            simulator.setOutlet(x, y);
+                        }
+                    }
+                });
+            }
+            
+            statusDiv.textContent = `시뮬레이터 초기화 완료 (${gridWidth}x${gridHeight})`;
+            updateInfo();
+        }
+        
+        function startSimulation() {
+            if (!simulator) {
+                statusDiv.textContent = '시뮬레이터가 초기화되지 않았습니다';
+                return;
+            }
+            
+            isRunning = true;
+            statusDiv.textContent = '시뮬레이션 실행 중...';
+            animate();
+        }
+        
+        function stopSimulation() {
+            isRunning = false;
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+            statusDiv.textContent = '시뮬레이션 정지됨';
+        }
+        
+        function stepSimulation(steps) {
+            if (!simulator) return;
+            
+            simulator.simulate(steps || 1);
+            drawVelocityField();
+            updateInfo();
+        }
+        
+        function animate() {
+            if (!isRunning) return;
+            
+            simulator.step();
+            drawVelocityField();
+            updateInfo();
+            
+            animationId = requestAnimationFrame(animate);
+        }
+        
+        function drawVelocityField() {
+            const cellWidth = canvas.width / simulator.width;
+            const cellHeight = canvas.height / simulator.height;
+            
+            const maxVel = simulator.getMaxVelocity();
+            
+            for (let y = 0; y < simulator.height; y++) {
+                for (let x = 0; x < simulator.width; x++) {
+                    const idx = y * simulator.width + x;
+                    
+                    let color;
+                    if (simulator.obstacle[idx] === 1) {
+                        color = 'rgb(80, 80, 80)';
+                    } else if (simulator.obstacle[idx] === 2) {
+                        color = 'rgb(0, 255, 0)';
+                    } else if (simulator.obstacle[idx] === 3) {
+                        color = 'rgb(255, 0, 0)';
+                    } else {
+                        const vel = Math.sqrt(
+                            simulator.ux[idx] * simulator.ux[idx] + 
+                            simulator.uy[idx] * simulator.uy[idx]
+                        );
+                        const normalized = Math.min(vel / (maxVel || 0.1), 1.0);
+                        
+                        const r = Math.floor(normalized * 255);
+                        const b = Math.floor((1 - normalized) * 255);
+                        color = `rgb(${r}, 100, ${b})`;
+                    }
+                    
+                    ctx.fillStyle = color;
+                    ctx.fillRect(
+                        x * cellWidth,
+                        y * cellHeight,
+                        cellWidth + 1,
+                        cellHeight + 1
+                    );
+                }
+            }
+        }
+        
+        function updateInfo() {
+            if (!simulator) return;
+            
+            const avgVel = simulator.getAverageVelocity();
+            const maxVel = simulator.getMaxVelocity();
+            
+            metricsDiv.innerHTML = `
+                <div>평균 속도: ${avgVel.toFixed(4)} m/s</div>
+                <div>최대 속도: ${maxVel.toFixed(4)} m/s</div>
+            `;
+        }
+        
+        function getResults() {
+            if (!simulator) return null;
+            
+            return {
+                velocityField: simulator.getVelocityField(),
+                avgVelocity: simulator.getAverageVelocity(),
+                maxVelocity: simulator.getMaxVelocity(),
+                gridWidth: simulator.width,
+                gridHeight: simulator.height
+            };
+        }
+        
+        window.initSimulator = initSimulator;
+        window.startSimulation = startSimulation;
+        window.stopSimulation = stopSimulation;
+        window.stepSimulation = stepSimulation;
+        window.getResults = getResults;
+        
+        statusDiv.textContent = '준비 완료. Android에서 초기화를 시작하세요.';
+    </script>
+</body>
+</html>

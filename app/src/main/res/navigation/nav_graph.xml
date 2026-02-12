@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/navigation_scan">
+
+    <fragment
+        android:id="@+id/navigation_scan"
+        android:name="com.ventilation.scanner.ui.scan.ScanFragment"
+        android:label="3D 스캔" />
+
+    <fragment
+        android:id="@+id/navigation_config"
+        android:name="com.ventilation.scanner.ui.config.ConfigFragment"
+        android:label="환기 설정" />
+
+    <fragment
+        android:id="@+id/navigation_result"
+        android:name="com.ventilation.scanner.ui.result.ResultFragment"
+        android:label="시뮬레이션 결과" />
+
+</navigation>
