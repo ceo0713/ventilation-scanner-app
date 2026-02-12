@@ -18,6 +18,7 @@ import com.ventilation.scanner.arcore.ARCoreManager
 import com.ventilation.scanner.arcore.MeshGenerator
 import com.ventilation.scanner.data.ScanData
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Date
@@ -117,7 +118,7 @@ class ScanFragment : Fragment() {
                         }
                     }
                     
-                    kotlinx.coroutines.delay(33)
+                    delay(33)
                 }
             }
         } ?: run {

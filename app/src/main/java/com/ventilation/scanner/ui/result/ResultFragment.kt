@@ -46,7 +46,7 @@ class ResultFragment : Fragment() {
         startSimulationButton = view.findViewById(R.id.start_simulation_button)
         
         cfdSimulator = CFDSimulator(requireContext())
-        webView.addView(cfdSimulator?.getWebView())
+        cfdSimulator?.getWebView()?.let { webView.addView(it) }
         
         startSimulationButton.setOnClickListener {
             runCompleteSimulation()
