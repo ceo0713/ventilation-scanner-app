@@ -147,7 +147,11 @@ class SolutionTabFragment : Fragment() {
                 afterScore.text = "점수: $afterScoreEstimate"
                 afterDeadzone.text = "데드존: ${String.format("%.1f", afterDeadzoneEstimate)}%"
                 
-                val improvement = ((afterScoreEstimate - before.ventilationScore) / before.ventilationScore.toFloat() * 100)
+                val improvement = if (before.ventilationScore > 0) {
+                    ((afterScoreEstimate - before.ventilationScore) / before.ventilationScore.toFloat() * 100)
+                } else {
+                    100f
+                }
                 improvementText.text = "개선율: ${String.format("%.1f", improvement)}%"
                 
                 comparisonCard.visibility = View.VISIBLE

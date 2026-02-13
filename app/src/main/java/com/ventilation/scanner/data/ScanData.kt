@@ -67,21 +67,22 @@ data class VentilationConfig(
 /**
  * 환기 개구부 (문, 창문, 환기구)
  */
+@kotlinx.parcelize.Parcelize
 data class VentilationOpening(
     val type: OpeningType,
-    val x: Float,  // Position in room (meters)
+    val x: Float,
     val y: Float,
     val z: Float,
-    val width: Float,   // Opening dimensions
+    val width: Float,
     val height: Float,
-    val velocity: Float = 0.5f,  // Air velocity (m/s)
+    val velocity: Float = 0.5f,
     val isActive: Boolean = true,
     val name: String = "",
-    val openingDepth: Float = 0.1f,  // m
-    val cmh: Float = 0f,  // 풍량
-    val temperature: Float = 0f,  // °C
+    val openingDepth: Float = 0.1f,
+    val cmh: Float = 0f,
+    val temperature: Float = 0f,
     val notes: String = ""
-) : Serializable
+) : Serializable, android.os.Parcelable
 
 enum class OpeningType {
     DOOR,

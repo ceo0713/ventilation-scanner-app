@@ -88,8 +88,11 @@ class VisualizationTabFragment : Fragment() {
     }
     
     private fun updateVisualization(mode: String) {
-        webView.evaluateJavascript("setRenderMode('$mode');", null)
+        // Store current visualization mode - actual visualization triggered after simulation completes
+        currentVisualizationMode = mode
     }
+    
+    private var currentVisualizationMode = "velocity"
     
     private fun runCompleteSimulation() {
         lifecycleScope.launch {
@@ -179,6 +182,8 @@ class VisualizationTabFragment : Fragment() {
     }
     
     private fun visualizeResults(mesh: SimpleMesh, results: com.ventilation.scanner.cfd.SimulationResults, config: com.ventilation.scanner.data.VentilationConfig) {
+        if (!isAdded || isDetached) return
+        
         val meshJson = """
             {
                 "vertices": ${gson.toJson(mesh.vertices.map { it.toList() })},
@@ -191,22 +196,43 @@ class VisualizationTabFragment : Fragment() {
             }
         """.trimIndent()
         
-        webView.evaluateJavascript("init();", null)
-        webView.evaluateJavascript("loadRoom($meshJson);", null)
-        
-        val velocityJson = """
-            {
-                "ux": ${gson.toJson(results.velocityField.ux)},
-                "uy": ${gson.toJson(results.velocityField.uy)},
-                "width": ${results.gridWidth},
-                "height": ${results.gridHeight}
+        webView.post {
+            webView.evaluateJavascript("init();", null)
+            webView.evaluateJavascript("loadRoom($meshJson);", null)
+            
+            val velocityJson = """
+                {
+                    "ux": ${gson.toJson(results.velocityField.ux)},
+                    "uy": ${gson.toJson(results.velocityField.uy)},
+                    "width": ${results.gridWidth},
+                    "height": ${results.gridHeight}
+                }
+            """.trimIndent()
+            
+            when (currentVisualizationMode) {
+                "velocity" -> {
+                    webView.evaluateJavascript("visualizeAirflow($velocityJson);", null)
+                }
+                "deadzone" -> {
+                    val deadZonesJson = gson.toJson(results.deadZones)
+                    webView.evaluateJavascript("visualizeDeadZones($deadZonesJson, $velocityJson);", null)
+                }
+                "concentration" -> {
+                    val concentrationJson = """
+                        {
+                            "data": ${gson.toJson(results.concentration)},
+                            "width": ${results.gridWidth},
+                            "height": ${results.gridHeight},
+                            "avgConcentration": ${results.avgConcentration}
+                        }
+                    """.trimIndent()
+                    webView.evaluateJavascript("visualizeConcentration($concentrationJson, $velocityJson);", null)
+                }
             }
-        """.trimIndent()
-        
-        webView.evaluateJavascript("visualizeAirflow($velocityJson);", null)
-        
-        val devicesJson = gson.toJson(config.inlets + config.outlets)
-        webView.evaluateJavascript("addDeviceMarkers($devicesJson);", null)
+            
+            val devicesJson = gson.toJson(config.inlets + config.outlets)
+            webView.evaluateJavascript("addDeviceMarkers($devicesJson);", null)
+        }
     }
     
     override fun onDestroy() {

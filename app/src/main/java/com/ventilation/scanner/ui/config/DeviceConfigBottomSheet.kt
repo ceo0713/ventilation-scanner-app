@@ -75,9 +75,11 @@ class DeviceConfigBottomSheet : BottomSheetDialogFragment() {
         super.onCreate(savedInstanceState)
         arguments?.let {
             @Suppress("DEPRECATION")
-            editingDevice = it.getSerializable(ARG_DEVICE) as? VentilationOpening
-            editingIndex = it.getInt(ARG_INDEX, -1)
-            filterOpenings = it.getBoolean(ARG_FILTER, false)
+            editingDevice = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                it.getParcelable(ARG_DEVICE, VentilationOpening::class.java)
+            } else {
+                it.getSerializable(ARG_DEVICE) as? VentilationOpening
+            }
         }
     }
     
