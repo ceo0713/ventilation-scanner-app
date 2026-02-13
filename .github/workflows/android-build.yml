@@ -5,9 +5,12 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
-  apk:
-    name: Generate APK
+  build:
+    name: Build and Release APK
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -25,39 +28,32 @@ jobs:
       - name: Build APK
         run: ./gradlew assembleDebug --stacktrace
         
-      - name: Upload APK
+      - name: Upload APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: apk
+          name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
-
-  release:
-    name: Release APK
-    needs: apk
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download APK from build
-        uses: actions/download-artifact@v4
-        with:
-          name: apk
           
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Release and Upload APK
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
-          release_name: Release v1.0.${{ github.run_number }}
+          name: Release v1.0.${{ github.run_number }}
+          files: app/build/outputs/apk/debug/app-debug.apk
+          body: |
+            ## 환기 스캐너 v1.0.${{ github.run_number }}
+            
+            ### 📱 설치 방법
+            1. **app-debug.apk** 다운로드
+            2. 휴대폰에서 "알 수 없는 출처" 앱 설치 허용
+            3. APK 파일 실행
+            
+            ### ✨ 주요 기능
+            - 📷 ARCore 3D 스캔
+            - 🌬️ CFD 환기 시뮬레이션
+            - 📊 3D 시각화
+            - 💾 로컬 데이터 저장
           draft: false
           prerelease: false
-          
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./app-debug.apk
-          asset_name: app-debug.apk
-          asset_content_type: application/vnd.android.package-archive
