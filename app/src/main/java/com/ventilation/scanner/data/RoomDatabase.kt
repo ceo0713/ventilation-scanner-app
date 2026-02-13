@@ -5,6 +5,8 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.CoroutineScope
 
 @Database(
@@ -13,7 +15,7 @@ import kotlinx.coroutines.CoroutineScope
         VentilationConfig::class,
         SimulationResult::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -27,6 +29,14 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: AppDatabase? = null
         
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE simulation_results ADD COLUMN deadZonePercentage REAL NOT NULL DEFAULT 0")
+                database.execSQL("ALTER TABLE simulation_results ADD COLUMN virusConcentrationField TEXT NOT NULL DEFAULT '[]'")
+                database.execSQL("ALTER TABLE simulation_results ADD COLUMN ventilationScore INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+        
         fun getDatabase(
             context: Context,
             scope: CoroutineScope? = null
@@ -36,7 +46,10 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "ventilation_scanner_database"
-                ).build()
+                )
+                    .addMigrations(MIGRATION_1_2)
+                    .fallbackToDestructiveMigration()
+                    .build()
                 INSTANCE = instance
                 instance
             }
@@ -61,6 +74,9 @@ interface ScanDao {
 
 @androidx.room.Dao
 interface VentilationConfigDao {
+    @androidx.room.Query("SELECT * FROM ventilation_configs ORDER BY timestamp DESC")
+    suspend fun getAllConfigs(): List<VentilationConfig>
+    
     @androidx.room.Query("SELECT * FROM ventilation_configs WHERE scanId = :scanId ORDER BY timestamp DESC")
     suspend fun getConfigsForScan(scanId: Long): List<VentilationConfig>
     
@@ -76,6 +92,9 @@ interface VentilationConfigDao {
 
 @androidx.room.Dao
 interface SimulationResultDao {
+    @androidx.room.Query("SELECT * FROM simulation_results ORDER BY timestamp DESC")
+    suspend fun getAllResults(): List<SimulationResult>
+    
     @androidx.room.Query("SELECT * FROM simulation_results WHERE configId = :configId ORDER BY timestamp DESC")
     suspend fun getResultsForConfig(configId: Long): List<SimulationResult>
     

@@ -74,6 +74,9 @@ dependencies {
 
     // RecyclerView
     implementation("androidx.recyclerview:recyclerview:1.3.2")
+    
+    // ViewPager2
+    implementation("androidx.viewpager2:viewpager2:1.0.0")
 
     // WebView support
     implementation("androidx.webkit:webkit:1.9.0")

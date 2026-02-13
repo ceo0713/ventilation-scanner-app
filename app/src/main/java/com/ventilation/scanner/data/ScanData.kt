@@ -6,6 +6,7 @@ import androidx.room.TypeConverter
 import androidx.room.TypeConverters
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import java.io.Serializable
 import java.util.Date
 
 /**
@@ -74,14 +75,39 @@ data class VentilationOpening(
     val width: Float,   // Opening dimensions
     val height: Float,
     val velocity: Float = 0.5f,  // Air velocity (m/s)
-    val isActive: Boolean = true
-)
+    val isActive: Boolean = true,
+    val name: String = "",
+    val openingDepth: Float = 0.1f,  // m
+    val cmh: Float = 0f,  // 풍량
+    val temperature: Float = 0f,  // °C
+    val notes: String = ""
+) : Serializable
 
 enum class OpeningType {
     DOOR,
     WINDOW,
     VENT,
-    AC_UNIT
+    AC_UNIT,
+    VENTILATOR,
+    AIR_PURIFIER,
+    AIR_STERILIZER;
+    
+    val isOpening: Boolean
+        get() = this in listOf(DOOR, WINDOW, VENT)
+    
+    val isDevice: Boolean
+        get() = this in listOf(AC_UNIT, VENTILATOR, AIR_PURIFIER, AIR_STERILIZER)
+    
+    val hasCMH: Boolean
+        get() = isDevice
+    
+    val defaultCMH: Float
+        get() = when (this) {
+            AC_UNIT -> 300f
+            VENTILATOR -> 200f
+            AIR_PURIFIER, AIR_STERILIZER -> 150f
+            else -> 0f
+        }
 }
 
 /**
@@ -110,6 +136,10 @@ data class SimulationResult(
     val avgAirVelocity: Float,
     val maxAirVelocity: Float,
     val ventilationRate: Float,  // Air changes per hour (ACH)
+    
+    val deadZonePercentage: Float = 0f,
+    val virusConcentrationField: String = "[]",
+    val ventilationScore: Int = 0,
     
     val timestamp: Date
 )

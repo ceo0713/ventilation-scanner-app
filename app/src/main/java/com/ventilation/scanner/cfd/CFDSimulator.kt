@@ -7,6 +7,7 @@ import android.webkit.WebSettings
 import com.google.gson.Gson
 import com.ventilation.scanner.data.VentilationConfig
 import com.ventilation.scanner.data.VentilationOpening
+import com.ventilation.scanner.data.OpeningType
 import com.ventilation.scanner.arcore.SimpleMesh
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
@@ -45,23 +46,45 @@ class CFDSimulator(context: Context) {
         val obstacles = mutableListOf<Obstacle>()
         val inlets = mutableListOf<Inlet>()
         val outlets = mutableListOf<Outlet>()
+        val acUnits = mutableListOf<ACDevice>()
+        val sterilizers = mutableListOf<SterilizerDevice>()
+        val ventilators = mutableListOf<VentilatorDevice>()
+        val purifiers = mutableListOf<PurifierDevice>()
         
-        config.inlets.forEach { opening ->
-            val gridX = ((opening.x - bounds.minX) / bounds.width * gridWidth).toInt()
-            val gridY = ((opening.z - bounds.minZ) / bounds.depth * gridHeight).toInt()
-            val gridW = (opening.width / bounds.width * gridWidth).toInt().coerceAtLeast(1)
-            val gridH = (opening.height / bounds.depth * gridHeight).toInt().coerceAtLeast(1)
-            
-            inlets.add(Inlet(gridX, gridY, gridW, gridH, opening.velocity * 0.1f, 0f))
-        }
+        val allDevices = config.inlets + config.outlets
         
-        config.outlets.forEach { opening ->
-            val gridX = ((opening.x - bounds.minX) / bounds.width * gridWidth).toInt()
-            val gridY = ((opening.z - bounds.minZ) / bounds.depth * gridHeight).toInt()
-            val gridW = (opening.width / bounds.width * gridWidth).toInt().coerceAtLeast(1)
-            val gridH = (opening.height / bounds.depth * gridHeight).toInt().coerceAtLeast(1)
+        allDevices.forEach { device ->
+            val gridX = ((device.x - bounds.minX) / bounds.width * gridWidth).toInt()
+            val gridY = ((device.z - bounds.minZ) / bounds.depth * gridHeight).toInt()
+            val gridW = (device.width / bounds.width * gridWidth).toInt().coerceAtLeast(1)
+            val gridH = (device.height / bounds.depth * gridHeight).toInt().coerceAtLeast(1)
+            val radius = (Math.sqrt(10.0) / bounds.width * gridWidth).toInt()
             
-            outlets.add(Outlet(gridX, gridY, gridW, gridH))
+            when (device.type) {
+                OpeningType.DOOR, OpeningType.WINDOW -> {
+                    val vel = if (device.cmh > 0) {
+                        device.cmh / (3600 * device.width * device.height)
+                    } else {
+                        device.velocity
+                    }
+                    inlets.add(Inlet(gridX, gridY, gridW, gridH, vel * 0.1f, 0f))
+                }
+                OpeningType.VENT -> {
+                    outlets.add(Outlet(gridX, gridY, gridW, gridH))
+                }
+                OpeningType.AC_UNIT -> {
+                    acUnits.add(ACDevice(gridX, gridY, device.cmh, gridW))
+                }
+                OpeningType.VENTILATOR -> {
+                    ventilators.add(VentilatorDevice(gridX, gridY, device.cmh, 1f, 0f))
+                }
+                OpeningType.AIR_PURIFIER -> {
+                    purifiers.add(PurifierDevice(gridX, gridY, device.cmh, radius))
+                }
+                OpeningType.AIR_STERILIZER -> {
+                    sterilizers.add(SterilizerDevice(gridX, gridY, device.cmh, radius))
+                }
+            }
         }
         
         for (i in 0 until gridWidth) {
@@ -83,16 +106,45 @@ class CFDSimulator(context: Context) {
         
         val configJson = gson.toJson(simConfig)
         
+        val acCalls = acUnits.joinToString("\n") { 
+            "simulator.setACUnit(${it.x}, ${it.y}, ${it.cmh}, ${it.spread});" 
+        }
+        val sterilizerCalls = sterilizers.joinToString("\n") { 
+            "simulator.setSterilizer(${it.x}, ${it.y}, ${it.cmh}, ${it.radius});" 
+        }
+        val ventilatorCalls = ventilators.joinToString("\n") { 
+            "simulator.setVentilator(${it.x}, ${it.y}, ${it.cmh}, ${it.dirX}, ${it.dirY});" 
+        }
+        val purifierCalls = purifiers.joinToString("\n") { 
+            "simulator.setPurifier(${it.x}, ${it.y}, ${it.cmh}, ${it.radius});" 
+        }
+        
         webView.post {
             webView.evaluateJavascript("""
                 initSimulator($configJson);
+                $acCalls
+                $sterilizerCalls
+                $ventilatorCalls
+                $purifierCalls
                 stepSimulation($timesteps);
-                AndroidBridge.onSimulationComplete(JSON.stringify(getResults()));
+                AndroidBridge.onSimulationComplete(JSON.stringify(simulator.getResults()));
             """.trimIndent(), null)
         }
     }
     
     fun getWebView(): WebView = webView
+    
+    suspend fun runBeforeAfterSimulation(
+        mesh: SimpleMesh,
+        beforeConfig: VentilationConfig,
+        afterConfig: VentilationConfig,
+        gridResolution: Int = 128,
+        timesteps: Int = 500
+    ): Pair<SimulationResults?, SimulationResults?> {
+        val before = runSimulation(mesh, beforeConfig, gridResolution, timesteps)
+        val after = runSimulation(mesh, afterConfig, gridResolution, timesteps)
+        return Pair(before, after)
+    }
     
     inner class JSBridge {
         @JavascriptInterface
@@ -140,12 +192,51 @@ data class Outlet(
     val height: Int
 )
 
+data class ACDevice(
+    val x: Int,
+    val y: Int,
+    val cmh: Float,
+    val spread: Int
+)
+
+data class SterilizerDevice(
+    val x: Int,
+    val y: Int,
+    val cmh: Float,
+    val radius: Int
+)
+
+data class VentilatorDevice(
+    val x: Int,
+    val y: Int,
+    val cmh: Float,
+    val dirX: Float,
+    val dirY: Float
+)
+
+data class PurifierDevice(
+    val x: Int,
+    val y: Int,
+    val cmh: Float,
+    val radius: Int
+)
+
+data class DeadZoneResult(
+    val map: List<Int>,
+    val percentage: Float,
+    val count: Int
+)
+
 data class SimulationResults(
     val velocityField: VelocityField,
     val avgVelocity: Float,
     val maxVelocity: Float,
     val gridWidth: Int,
-    val gridHeight: Int
+    val gridHeight: Int,
+    val deadZones: DeadZoneResult? = null,
+    val deadZonePercentage: Float = 0f,
+    val concentration: List<Float>? = null,
+    val avgConcentration: Float = 1f
 )
 
 data class VelocityField(
